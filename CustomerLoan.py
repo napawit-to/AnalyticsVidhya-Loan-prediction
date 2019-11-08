@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[270]:
+# In[279]:
 
 
 import numpy as np
@@ -32,41 +32,44 @@ from sklearn.preprocessing import MinMaxScaler
 from imblearn.over_sampling import RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.over_sampling import SMOTE
-
+from xgboost import XGBClassifier
 import pickle
 
 
-# In[247]:
+# In[280]:
 
 
 import warnings
 warnings.filterwarnings("ignore")
 
 
-# In[248]:
+# In[281]:
 
 
 trained_data = "train.csv"
 test_data = "test.csv"
 
 
-# In[249]:
+# In[282]:
 
 
 data_raw_trained = pd.read_csv(trained_data,header=0,sep=',',na_values='unknown')
 data_raw_trained['Loan_Status'].replace('N', 0, inplace=True)
 data_raw_trained['Loan_Status'].replace('Y', 1, inplace=True)
 
-data_raw_test = pd.read_csv(test_data,header=0,sep=',',na_values='unknown')
-loanID = data_raw_test.dropna().Loan_ID
+
+# In[283]:
+
+
+data_raw_trained.shape
 
 
 # ## Data preparation
 
-# In[250]:
+# In[284]:
 
 
-def preprocessing(data):
+def preprocessingtrained(data):
     data_raw_trained_clean = data.copy().drop('Loan_ID',axis=1)
     # Seperate between categorical and numerical data
     clean_data_obj = data_raw_trained_clean.select_dtypes(include=['object'])
@@ -76,17 +79,25 @@ def preprocessing(data):
     scaler = MinMaxScaler()
     scaler.fit(clean_data_num)
     clean_data_num = pd.DataFrame(scaler.transform(clean_data_num),columns=clean_data_num.keys())
-    data_raw_trained_clean = clean_data_num.join(clean_data_obj)
-    return data_raw_trained_clean
+    data_raw_clean = clean_data_num.join(clean_data_obj)
+    return data_raw_clean
 
 
-# In[251]:
+# In[285]:
+
+
+prep_data_trained = preprocessingtrained(data_raw_trained)
+features = prep_data_trained.dropna().drop('Loan_Status',axis=1)
+label = prep_data_trained.dropna().Loan_Status
+
+
+# In[286]:
 
 
 train_x,test_x,train_y,test_y = train_test_split(features,label, test_size=0.33, random_state=42)
 
 
-# In[252]:
+# In[287]:
 
 
 # Logistic Regression
@@ -96,7 +107,17 @@ scores = cross_val_score(lr_clf,train_x,train_y,cv=3,scoring='roc_auc')
 print(f"Logistic Regression model's average AUC: {scores.mean():.4f}")
 
 
-# In[253]:
+# In[288]:
+
+
+# Random Forest
+rf_clf = RandomForestClassifier()
+scores = cross_val_score(rf_clf,train_x,train_y,cv=10,scoring='roc_auc')
+
+print(f"Random Forest Classfier model's average AUC: {scores.mean():.4f}")
+
+
+# In[289]:
 
 
 # Decision Tree
@@ -106,7 +127,7 @@ scores = cross_val_score(tree_clf,train_x,train_y,cv=10,scoring='roc_auc')
 print(f"Tree Classifer model's average AUC: {scores.mean():.4f}")
 
 
-# In[254]:
+# In[290]:
 
 
 # SVM
@@ -116,7 +137,7 @@ scores = cross_val_score(svm_clf,train_x,train_y,cv=10,scoring='roc_auc')
 print(f"SVM Classfier model's average AUC: {scores.mean():.4f}")
 
 
-# In[255]:
+# In[291]:
 
 
 # XGBClassifier
@@ -128,7 +149,7 @@ print(f"XG Classfier model's average AUC: {scores.mean():.4f}")
 
 # ## Selected Model Evaluation 
 
-# In[256]:
+# In[292]:
 
 
 def eval_matrics(pred_class_y,pred_prob_y,label_y,model_name='Model'):
@@ -149,7 +170,7 @@ def eval_matrics(pred_class_y,pred_prob_y,label_y,model_name='Model'):
     return    
 
 
-# In[257]:
+# In[293]:
 
 
 # LogisticRegression
@@ -160,36 +181,42 @@ pred_prob_y = lr_clf.predict_proba(test_x)
 eval_matrics(pred_class_y,pred_prob_y,test_y,'Logistic Regression Model')
 
 
-# In[258]:
+# In[294]:
+
+
+pred_class_y
+
+
+# In[194]:
 
 
 fpr_lr_base, tpr_lr_base ,_= roc_curve(test_y, pred_prob_y[:,1])
 
 
-# In[259]:
+# In[195]:
 
 
-# XGBClassifier
-xg_clf = XGBClassifier().fit(train_x,train_y)
-pred_class_y = xg_clf.predict(test_x)
-pred_prob_y = xg_clf.predict_proba(test_x)
+# Fit and Predict
+rf_clf = RandomForestClassifier().fit(train_x,train_y)
+pred_class_y = rf_clf.predict(test_x)
+pred_prob_y = rf_clf.predict_proba(test_x)
 # Evaluate
-eval_matrics(pred_class_y,pred_prob_y,test_y,'XGBClassifier Model')
+eval_matrics(pred_class_y,pred_prob_y,test_y,'Random Forest Model')
 
 
-# In[260]:
+# In[196]:
 
 
 # Calculate fpr,and tpr for future ROC ploting
-fpr_xg_base, tpr_xg_base ,_= roc_curve(test_y, pred_prob_y[:,1])
+fpr_rf_base, tpr_rf_base ,_= roc_curve(test_y, pred_prob_y[:,1])
 
 
-# In[261]:
+# In[197]:
 
 
 
 plt.plot(fpr_lr_base, tpr_lr_base ,linewidth=2, label='LR')
-plt.plot(fpr_xg_base, tpr_xg_base ,linewidth=2, label='XG')
+plt.plot(fpr_rf_base, tpr_rf_base ,linewidth=2, label='XG')
 plt.plot([0,1],[0,1],'k--')
 plt.axis([0,1,0,1])
 plt.legend()
@@ -199,32 +226,219 @@ plt.title('ROC of Baseline Models')
 plt.show()
 
 
-# In[216]:
+# ## Gridsearch
+
+# In[198]:
 
 
-from sklearn.model_selection import train_test_split
-data_raw_trained_clean = preprocessing(data_raw_trained)
-data_raw_test_clean = preprocessing(data_raw_test)
-features = data_raw_trained_clean.dropna().drop('Loan_Status',axis=1)
-label = data_raw_trained_clean.dropna().Loan_Status
+# Create Grid parameters
+# linear regularization type (penalty)
+penalty_type = ['l1','l2']
 
-model = XGBClassifier()
-model.fit(features, label)
+# Inverse of regularization strength (C)
+reg_str = [0.001, 0.01, 0.1, 1, 10, 100, 1000] 
+
+# Weights associated with classes (class_weight)
+cl_weight = [None, 'balanced']
+# cl_weight = [None, 'balanced',{0:1,1:2}]
+
+# Create the grid search parameters
+lr_param_grid = {'penalty':penalty_type,
+                  'C':reg_str,
+                  'class_weight':cl_weight}
+# Create a based model
+lr_clf = LogisticRegression()
+# Instantiate the grid search model
+lr_grid_search = GridSearchCV(estimator = lr_clf, param_grid = lr_param_grid, cv=3, scoring ='roc_auc',verbose=1)
+# Fit the grid search to the data
+lr_grid_search.fit(train_x,train_y)
 
 
-# In[272]:
+# In[71]:
 
 
-y_pred = model.predict(data_raw_test_clean)
+# Create Grid parameters
+# Number of trees in random forest
+n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
+# Number of features to consider at every split
+max_features = ['auto','sqrt']
+# Maximum number of levels in tree 
+max_depth = [int(x) for x in np.linspace(start = 10, stop =100, num =10)]
+max_depth.append(None)
+# Minimum number of samples required to split a node
+min_samples_split = [2, 5, 10]
+# Minimum number of samples required at each leaf node
+min_samples_leaf = [1, 2, 4]
+# Method of selecting samples for training each tree
+bootstrap = [True, False]
+
+# Create the random grid
+rf_random_grid = {'n_estimators':n_estimators, 
+                  'max_features':max_features,
+                  'max_depth':max_depth, 
+                  'min_samples_split':min_samples_split,
+                  'min_samples_leaf':min_samples_leaf,
+                  'bootstrap':bootstrap}
 
 
-# In[218]:
+# In[72]:
 
 
+# Random Search Training
+# Create a based model
+rf = RandomForestClassifier()
+# Initiate a random search model 
+rf_random = RandomizedSearchCV(estimator = rf, param_distributions = rf_random_grid, n_iter = 20, 
+                              cv =3, random_state =42,scoring='roc_auc')
+# Fit the random search model
+rf_random.fit(train_x,train_y)
 
 
+# ## Evaluate Tuning Models
 
-# In[188]:
+# In[312]:
+
+
+lr_grid_search.best_params_
+
+
+# In[320]:
+
+
+# Fit and Predict
+lr_clf = LogisticRegression(penalty='l2', C=0.01,class_weight='balanced').fit(train_x,train_y)
+pred_class_y = lr_clf.predict(test_x)
+pred_prob_y = lr_clf.predict_proba(test_x)
+# Evaluate
+eval_matrics(pred_class_y,pred_prob_y,test_y,'Tuned LR Model')
+
+
+# In[323]:
+
+
+fpr_lr_tuned, tpr_lr_tuned ,_= roc_curve(test_y, pred_prob_y[:,1])
+
+
+# In[324]:
+
+
+rf_random.best_params_
+
+
+# In[203]:
+
+
+# Fit and Predict
+rf_clf = RandomForestClassifier(n_estimators=2000, bootstrap=False, 
+                                  max_depth=20, max_features='auto', 
+                                  min_samples_leaf=1, min_samples_split=2, 
+                                 ).fit(train_x,train_y)
+pred_class_y = rf_clf.predict(test_x)
+pred_prob_y = rf_clf.predict_proba(test_x)
+# Evaluate
+eval_matrics(pred_class_y,pred_prob_y,test_y,'Tuned RF Model')
+
+
+# In[299]:
+
+
+# Calculate fpr,and tpr for future ROC ploting
+fpr_rf_tuned, tpr_rf_tuned ,_= roc_curve(test_y, pred_prob_y[:,1])
+
+
+# #### Plot ROC of Tuning vs Base Models
+
+# In[300]:
+
+
+plt.plot(fpr_lr_base, tpr_lr_base, 'b--',linewidth=1, label='LR_based')
+plt.plot(fpr_lr_tuned, tpr_lr_tuned, 'b-',linewidth=2, label='LR_tuned')
+plt.plot(fpr_rf_base, tpr_rf_base, 'g--',linewidth=1, label='RF_based')
+plt.plot(fpr_rf_tuned, tpr_rf_tuned, 'g-',linewidth=2, label='RF_tuned')
+plt.plot([0,1],[0,1],'k--')
+plt.axis([0,1,0,1])
+plt.legend()
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC of Tuning vs Base Models')
+plt.show()
+
+
+# ## Preprocessing test data
+
+# In[301]:
+
+
+data_raw_test = pd.read_csv(test_data,header=0,sep=',',na_values='unknown')
+
+
+# In[302]:
+
+
+def preprocessingtest(data):
+    data_raw_trained_clean = data.copy().drop('Loan_ID',axis=1)
+    # Seperate between categorical and numerical data
+    clean_data_obj_test = data_raw_trained_clean.select_dtypes(include=['object'])
+    clean_data_num_test = data_raw_trained_clean.select_dtypes(exclude=['object']) 
+    # One-hot categorical data
+    clean_data_obj_test = pd.get_dummies(clean_data_obj_test,drop_first=True)
+    scaler = MinMaxScaler()
+    scaler.fit(clean_data_num_test)
+    clean_data_num_test = pd.DataFrame(scaler.transform(clean_data_num_test),columns=clean_data_num_test.keys())
+    data_raw_clean = clean_data_num_test.join(clean_data_obj_test)
+    return data_raw_test_clean
+
+
+# In[303]:
+
+
+data_raw_test_clean = preprocessingtest(data_raw_test)
+
+
+# In[304]:
+
+
+data_raw_test_clean =data_raw_test_clean.fillna(0)
+data_raw_test_clean.corr
+
+
+# In[305]:
+
+
+features.shape
+
+
+# In[306]:
+
+
+prep_data_test_clean.shape
+
+
+# In[327]:
+
+
+# Fit and Predict
+lr_clf = LogisticRegression(penalty='l2', C=0.01,class_weight='balanced').fit(features,label)
+pred_class_y = lr_clf.predict(prep_data_test_clean)
+
+
+# In[329]:
+
+
+df = pd.DataFrame(pred_class_y)
+df.to_csv(r'status.csv')
+# col_names =  ['Loan_Status']
+# result_df  = pd.DataFrame(columns = col_names)
+# result_df['Loan_Status'] = 
+
+
+# In[330]:
+
+
+pred_class_y
+
+
+# In[ ]:
 
 
 
